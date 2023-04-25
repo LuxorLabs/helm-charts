@@ -1,0 +1,14 @@
+apiVersion: v1
+entries:
+  rudderstack:
+  - apiVersion: v2
+    appVersion: 1.16.0
+    created: "2022-05-13T17:25:03.045198459Z"
+    description: A Helm chart for Kubernetes
+    digest: eb51b3649ee2dab9121792ef9135186f53f991ed6b0b6bda40abe00642ed9f50
+    name: rudderstack
+    type: application
+    urls:
+    - https://github.com/LuxorLabs/helm-charts/releases/download/rudderstack-0.4.1/rudderstack-0.4.1.tgz
+    version: 0.4.1
+generated: "2022-05-13T17:25:03.045239759Z"
