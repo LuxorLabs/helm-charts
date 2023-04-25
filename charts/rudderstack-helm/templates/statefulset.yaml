@@ -1,3 +1,5 @@
+{{- $baseConfig := .Files.Get "rudder-config.yaml" | fromYaml -}}
+{{- $rudderConfig := mustMergeOverwrite $baseConfig .Values.backend.config.overrides -}}
 apiVersion: {{ include "statefulset.apiVersion" . }}
 kind: StatefulSet
 metadata:
@@ -15,7 +17,10 @@ spec:
       labels:
         {{- include "rudderstack.selectorLabels" . | nindent 8 }}
       annotations:
-        checksum/rudder-config: {{ .Files.Get "rudder-config.yaml" | sha256sum }}
+        {{- if not .Values.rudderWorkspaceTokenExistingSecret }}
+        checksum/rudder-workspace-token: {{ include (print $.Template.BasePath "/secret-rudder-token.yaml") . | sha256sum }}
+        {{- end }}
+        checksum/rudder-config: {{ $rudderConfig | toYaml | sha256sum }}
         checksum/rudder-bigquery-credentials: {{ .Files.Get "bigquery-credentials.json" | sha256sum }}
     spec:
     {{- with .Values.global.imagePullSecrets }}
@@ -27,11 +32,13 @@ spec:
             defaultMode: 420
             name: {{ include "backend.fullname" . }}-config
           name: backend-config-volume
+        {{- if .Values.telegraf_sidecar }}
         {{- if .Values.telegraf_sidecar.enabled}}
         - name: telegraf
           configMap:
             defaultMode: 420
             name: {{ include "telegraf-sidecar.fullname" . }}-config
+        {{- end }}
         {{- end }}
         {{- if .Values.gcpCredentialSecret.enabled }}
         - name: google-application-credentials
@@ -71,7 +78,10 @@ spec:
             {{- .Values.backend.extraEnvVars | toYaml | nindent 10 }}
           {{- end }}
           - name: CONFIG_BACKEND_TOKEN
-            value: {{ .Values.rudderWorkspaceToken }}
+            valueFrom:
+              secretKeyRef:
+                name: {{ template "rudderstack.rudderWorkspaceTokenSecretName" . }}
+                key: rudderWorkspaceToken
             {{- if .Values.backend.controlPlaneJSON }}
           - name: RSERVER_BACKEND_CONFIG_CONFIG_FROM_FILE
             value: "{{ .Values.backend.controlPlaneJSON }}"
@@ -103,7 +113,7 @@ spec:
           - name: KUBE_NAMESPACE
             value: {{ .Release.Namespace }}
         command: ["/docker-entrypoint.sh"]
-        args: ["/bin/sh","-c","/wait-for $JOBS_DB_HOST:$(JOBS_DB_PORT) -- /rudder-server"]
+        args: ["/bin/sh","-c","/wait-for $JOBS_DB_HOST:$(JOBS_DB_PORT) {{ if (include "statsd.enabled" .) -}} -- /wait-for -u {{ include "statsd.url" .}} {{- end }} -- /rudder-server"]
         {{- if .Values.telegraf_sidecar.enabled}}
       - name: {{ include "telegraf-sidecar.name" .}}
         image: "{{ .Values.telegraf_sidecar.image.repo }}:{{ .Values.telegraf_sidecar.image.tag }}"
